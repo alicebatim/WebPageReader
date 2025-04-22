@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Reader Mode</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 1em;
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            background: #f9f9f9;
+            color: #333;
+            transition: background 0.3s, color 0.3s;
+        }
+        body.dark {
+            background: #121212;
+            color: #eee;
+        }
+        input, textarea {
+            width: 100%;
+            margin-bottom: 1em;
+            padding: 0.5em;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 0.75em;
+            font-size: 1em;
+            background: #007acc;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 1em;
+        }
+        button:hover {
+            background: #005fa3;
+        }
+        .output {
+            background: white;
+            padding: 1em;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+            margin-bottom: 1em;
+            font-size: 16px;
+        }
+        body.dark .output {
+            background: #1e1e1e;
+        }
+        .dark-toggle {
+            position: fixed;
+            top: 1em;
+            right: 1em;
+            background: #333;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.2em;
+            cursor: pointer;
+        }
+        .controls {
+            display: flex;
+            gap: 0.5em;
+            margin-bottom: 1em;
+        }
+        .controls button {
+            flex: 1;
+            padding: 0.5em;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+<button class="dark-toggle" onclick="toggleDark()">☀️</button>
+
+<h2>Mobile Reader Mode</h2>
+<p>Paste text or enter a URL to simplify and read!</p>
+
+<input id="urlInput" type="url" placeholder="Enter URL (https://...)">
+<button onclick="fetchAndSimplify()">Load from URL</button>
+
+<textarea id="inputText" placeholder="Or paste article text here..."></textarea>
+<button onclick="simplifyText()">Simplify Text</button>
+
+<div class="controls">
+    <button onclick="adjustFontSize(2)">A+</button>
+    <button onclick="adjustFontSize(-2)">A-</button>
+    <button onclick="saveAsText()">Save as .txt</button>
+    <button onclick="saveAsPDF()">Save as PDF</button>
+</div>
+
+<div id="output" class="output" style="display:none;"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+    let currentFontSize = 16;
+
+    function simplifyText() {
+        let rawText = document.getElementById('inputText').value;
+        let simplified = rawText
+            .replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "")
+            .replace(/<\/?(aside|nav|footer|header|form|noscript|iframe|style)[^>]*>/gi, "")
+            .replace(/\n\s*\n/g, "</p><p>")
+            .replace(/\n/g, " ")
+            .trim();
+
+        document.getElementById('output').innerHTML = `<p>${simplified}</p>`;
+        document.getElementById('output').style.display = 'block';
+        window.scrollTo(0, document.getElementById('output').offsetTop);
+    }
+
+    async function fetchAndSimplify() {
+        const url = document.getElementById('urlInput').value;
+        if (!url) return alert("Please enter a valid URL.");
+
+        try {
+            const proxy = "https://api.allorigins.win/get?url=" + encodeURIComponent(url);
+            const response = await fetch(proxy);
+            const data = await response.json();
+
+            let tempDiv = document.createElement('div');
+            tempDiv.innerHTML = data.contents;
+
+            tempDiv.querySelectorAll('script, aside, nav, footer, header, form, noscript, iframe, style').forEach(el => el.remove());
+
+            let textContent = tempDiv.innerText
+                .replace(/\n\s*\n/g, "</p><p>")
+                .replace(/\n/g, " ")
+                .trim();
+
+            document.getElementById('output').innerHTML = `<p>${textContent}</p>`;
+            document.getElementById('output').style.display = 'block';
+            window.scrollTo(0, document.getElementById('output').offsetTop);
+        } catch (err) {
+            console.error(err);
+            alert("Failed to fetch or simplify this URL (maybe blocked or cross-origin issue).");
+        }
+    }
+
+    function toggleDark() {
+        document.body.classList.toggle('dark');
+        document.querySelector('.dark-toggle').textContent =
+            document.body.classList.contains('dark') ? '🌙' : '☀️';
+    }
+
+    function adjustFontSize(change) {
+        currentFontSize = Math.max(12, currentFontSize + change);
+        document.getElementById('output').style.fontSize = currentFontSize + 'px';
+    }
+
+    function saveAsText() {
+        const content = document.getElementById('output').innerText;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'simplified-text.txt';
+        link.click();
+    }
+
+    async function saveAsPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const text = document.getElementById('output').innerText;
+        const lines = doc.splitTextToSize(text, 180);
+        doc.text(lines, 10, 10);
+        doc.save('simplified-text.pdf');
+    }
+</script>
+
+</body>
+</html>
